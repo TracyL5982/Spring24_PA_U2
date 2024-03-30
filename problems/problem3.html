@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>CPSC 487/587</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.3.0/math.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quaternion@1.5.1/quaternion.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/numeric@1.2.6/numeric-1.2.6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+              "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+              "three/": "https://unpkg.com/three@0.160.0/"
+            }
+        }
+    </script>
+</head>
+<body>
+<script type="module">
+    // todo: recreate this visualization, demonstrating your understanding of SO(2)
+    // todo: https://yale-cpsc-487-587-internal-djrakita-c95fa6c3239a481a48d29a6b0fd.gitlab.io/html/visualizations/point_mapping_2D_so2.html
+    // todo: (no need to draw the unit circle here)
+    // todo: or, feel free to come up with any visualization here that demonstrates your understanding of SO(2)
+    import {get_default_lil_gui, ThreeEngine, refresh_displays} from "../js/utils/utils_three.js";
+    import {mul_matrix_matrix} from "../../js/utils/utils_math.js";
+
+    let engine = ThreeEngine.new_default_2d();
+    let meshIndex = engine.add_standard2Dshape_as_mesh_object(0x00ffff);
+
+    let params = {
+        drawPoints: true,
+        drawWireframe: true,
+        drawMesh: false,
+        pointSize: 0.02, //from 0.001 to 0.03
+        theta: 0,
+        determinant: 1.0
+    };
+
+    //reset matrix
+    let operations = {
+        resetMatrix: function() {
+            params.theta = 0;
+            refresh_displays(gui);
+        }
+    }
+
+    //set up gui
+    let gui = get_default_lil_gui();
+    gui.add(params, 'drawPoints').name('Draw Points');
+    gui.add(params, 'drawWireframe').name('Draw Wireframe');
+    gui.add(params, 'drawMesh').name('Draw Mesh')
+    gui.add(params, 'pointSize', 0.001, 0.03).name('Point Size');
+
+    let folder = gui.addFolder("Matrix Controls");
+    folder.add(params, 'theta', -Math.PI, Math.PI).name('Theta');
+    folder.add(operations, 'resetMatrix').name('Reset Matrix');
+    folder.add(params, 'determinant').name('Determinant').disable();
+
+    // get the default location of points
+    let points = engine.get_local_vertex_positions_of_mesh_object(meshIndex);
+    let wireframe_points = engine.get_local_vertex_positions_of_mesh_object_wireframe(meshIndex);
+    
+    engine.animation_loop(function() {
+
+        let so2 = [[Math.cos(params.theta), -Math.sin(params.theta)], [Math.sin(params.theta), Math.cos(params.theta)]];
+        let c1 = [Math.cos(params.theta), Math.sin(params.theta)];
+        let c2 = [-Math.sin(params.theta), Math.cos(params.theta)];
+
+        engine.draw_debug_vector([0,0], c1, 0.035, undefined, 0xff0000);
+        engine.draw_debug_vector([0,0], c2, 0.035, undefined, 0x00ff00);
+
+        let det = Math.cos(params.theta) * Math.cos(params.theta) - (-(Math.sin(params.theta))) * Math.sin(params.theta);
+        params.determinant = det.toString();
+        refresh_displays(gui);
+
+        let new_points = points.map(point => mul_matrix_matrix(so2,point));
+        let new_wireframe_points = wireframe_points.map(wireframe_point => mul_matrix_matrix (so2, wireframe_point));
+
+        engine.update_vertex_positions_of_mesh_object(meshIndex, new_points);
+        engine.update_vertex_positions_of_mesh_object_wireframe(meshIndex, new_wireframe_points);
+
+        if (params.drawPoints){
+            new_points.forEach(point => {
+                engine.draw_debug_sphere(point, params.pointSize, 0xffff00);
+            })
+        }
+
+        engine.mesh_objects[meshIndex].visible = params.drawMesh;
+        engine.set_mesh_object_wireframe_visibility (meshIndex, params.drawWireframe);
+    });
+
+</script>
+</body>
+</html>
+
+

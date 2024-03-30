@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>CPSC 487/587</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.3.0/math.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quaternion@1.5.1/quaternion.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/numeric@1.2.6/numeric-1.2.6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+              "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+              "three/": "https://unpkg.com/three@0.160.0/"
+            }
+        }
+    </script>
+</head>
+<body>
+<script type="module">
+
+    // todo: recreate this visualization, demonstrating your understanding of displacement-based distance in SE(2)
+    // todo: https://yale-cpsc-487-587-internal-djrakita-c95fa6c3239a481a48d29a6b0fd.gitlab.io/html/visualizations/SE2_distance2.html
+    // todo: make sure you are using the displacement-based distance!
+    // todo: or, feel free to come up with any visualization here that demonstrates your understanding of SE(2) distance
+
+    import {get_default_lil_gui, ThreeEngine, refresh_displays} from "../js/utils/utils_three.js";
+    import {add_matrix_matrix, mul_matrix_scalar, mul_matrix_matrix, frobenius_norm_matrix, sub_matrix_matrix, transpose} from "../../js/utils/utils_math.js";
+
+    let engine = ThreeEngine.new_default_2d();
+
+    let params = {
+        theta1: 0,
+        tx1: 0,
+        ty1: 0,
+        theta2: 0,
+        tx2: 0,
+        ty2: 0,
+        distance: 0
+    };
+
+    //reset matrix
+    let operations = {
+        reset1: function() {
+            params.theta1 = 0.0;
+            params.tx1 = 0.0;
+            params.ty1 = 0.0;
+            refresh_displays(gui);
+        },
+        reset2: function() {
+            params.theta2 = 0.0;
+            params.tx2 = 0.0;
+            params.ty2 = 0.0;
+            refresh_displays(gui);
+        }
+    };
+
+    //set up gui
+    let gui = get_default_lil_gui();
+    gui.add(params, 'theta1', -Math.PI, Math.PI).name('Theta1');
+    gui.add(params, 'tx1', -2, 2).name('tx1');
+    gui.add(params, 'ty1', -2, 2).name('ty1')
+    gui.add(operations, 'reset1').name('reset1');
+
+    gui.add(params, 'theta2', -Math.PI, Math.PI).name('Theta2');
+    gui.add(params, 'tx2', -2, 2).name('tx2');
+    gui.add(params, 'ty2', -2, 2).name('ty2')
+    gui.add(operations, 'reset2').name('reset2');
+
+    gui.add(params, 'distance').name('disp based dis').disable();
+
+    let x = [[1.0], [0.0]];
+    let y = [[0.0], [1.0]];
+
+    function se2_distance (R1, t1, R2, t2){
+
+        //step1: calculate T1 ^ -1 
+        // R1^T, -R1^T * t1
+        // 0  ,  1
+        let R1_inverse = transpose(R1);
+        let t1_inverse = mul_matrix_matrix(mul_matrix_scalar(R1_inverse, -1), t1);
+
+        //step2: calculate T = T1^-1 * T2
+        // R1^T * R2, R1^T * (t2-t1)
+        // 0        , 1
+        let R = mul_matrix_matrix(R1_inverse, R2);
+        let t = add_matrix_matrix(mul_matrix_matrix(R1_inverse, t2), t1_inverse);
+
+        //step3: calculate the rotation angle theta
+        let theta = Math.atan2(R[1][0], R[0][0]);
+
+        //step4: calculate the transformation vector
+        let rot_sin;
+        let rot_cos;
+        if(Math.abs(theta) < 0.01) {
+            //if theta is too small, approximate using Taylor series to avoid division by 0
+            rot_sin = 1.0 - (Math.pow(theta, 2.0)/6.0) +  (Math.pow(theta, 4.0)/120.0);
+            rot_cos = theta/2.0 - (Math.pow(theta,3.0)/24.0) + (Math.pow(theta, 5.0)/720.0);
+        } else {
+            rot_sin = Math.sin(theta) / theta;
+            rot_cos = (1.0 - Math.cos(theta)) / theta;
+        }
+
+        let det = 1.0 / (Math.pow(rot_sin,2) + Math.pow(rot_cos, 2));
+        let rot_inverse = mul_matrix_scalar([ [rot_sin, rot_cos], [-rot_cos, rot_sin] ], det);
+        let t_final = mul_matrix_matrix(rot_inverse, t);
+        let x_final = t_final[0][0];
+        let y_final = t_final[1][0];
+
+        return Math.sqrt(Math.pow(theta, 2) + Math.pow(x_final, 2) + Math.pow(y_final, 2));
+    }
+    
+    engine.animation_loop(function() {
+
+        let R1 = [[Math.cos(params.theta1), -Math.sin(params.theta1)], [Math.sin(params.theta1), Math.cos(params.theta1)]];
+        let x1 = add_matrix_matrix(mul_matrix_matrix(R1, x), [params.tx1,params.ty1]);
+        let y1 = add_matrix_matrix(mul_matrix_matrix(R1, y), [params.tx1,params.ty1]);
+       
+        let R2 = [[Math.cos(params.theta2), -Math.sin(params.theta2)], [Math.sin(params.theta2), Math.cos(params.theta2)]];
+        let x2 = add_matrix_matrix(mul_matrix_matrix(R2, x), [params.tx2,params.ty2]);
+        let y2 = add_matrix_matrix(mul_matrix_matrix(R2, y), [params.tx2,params.ty2]);
+       
+        engine.draw_debug_vector([params.tx1,params.ty1], x1, 0.035, undefined, 0xff0000);
+        engine.draw_debug_vector([params.tx1,params.ty1], y1, 0.035, undefined, 0x00ff00);
+
+        engine.draw_debug_vector([params.tx2,params.ty2], x2, 0.035, undefined, 0xaa4444);
+        engine.draw_debug_vector([params.tx2,params.ty2], y2, 0.035, undefined, 0x44aa44);
+
+        let t1 = [[params.tx1],[params.ty1]];
+        let t2 = [[params.tx2],[params.ty2]];
+        let curr_distance = se2_distance (R1, t1, R2, t2);
+
+        params.distance = curr_distance;
+        refresh_displays(gui);
+    });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>CPSC 487/587</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.3.0/math.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quaternion@1.5.1/quaternion.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/numeric@1.2.6/numeric-1.2.6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+              "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+              "three/": "https://unpkg.com/three@0.160.0/"
+            }
+        }
+    </script>
+</head>
+<body>
+<script type="module">
+
+    // todo: recreate this visualization, demonstrating your understanding of SE(2)
+    // todo: https://yale-cpsc-487-587-internal-djrakita-c95fa6c3239a481a48d29a6b0fd.gitlab.io/html/visualizations/point_mapping_2D_direct_isometry.html
+    // todo: (no need to draw the unit circle here)
+    // todo: or, feel free to come up with any visualization here that demonstrates your understanding of SE(2)
+
+    import {get_default_lil_gui, ThreeEngine, refresh_displays} from "../js/utils/utils_three.js";
+    import {mul_matrix_matrix} from "../../js/utils/utils_math.js";
+
+    let engine = ThreeEngine.new_default_2d();
+    let meshIndex = engine.add_standard2Dshape_as_mesh_object(0x00ffff);
+
+    let params = {
+        drawPoints: true,
+        drawWireframe: true,
+        drawMesh: false,
+        pointSize: 0.02, //from 0.001 to 0.03
+        translationX: 0,
+        translationY: 0,
+        rotationAngle: 0
+    };
+
+    //reset matrix
+    let operations = {
+        resetIsometryControls: function() {
+            params.translationX = 0.0;
+            params.translationY = 0.0;
+            params.rotationAngle = 0.0;
+            refresh_displays(gui);
+        }
+    };
+
+    //set up gui
+    let gui = get_default_lil_gui();
+    gui.add(params, 'drawPoints').name('Draw Points');
+    gui.add(params, 'drawWireframe').name('Draw Wireframe');
+    gui.add(params, 'drawMesh').name('Draw Mesh')
+    gui.add(params, 'pointSize', 0.001, 0.03).name('Point Size');
+
+    let folder = gui.addFolder("Isometry Controls");
+    folder.add(params, 'translationX', -2.0, 2.0).name('Translation x');
+    folder.add(params, 'translationY', -2.0, 2.0).name('Translation y');
+    folder.add(params, 'rotationAngle', -Math.PI, Math.PI).name('Rotation Angle');
+    folder.add(operations, 'resetIsometryControls').name('Reset');
+
+    // get the default location of points
+    let points = engine.get_local_vertex_positions_of_mesh_object(meshIndex);
+    let wireframe_points = engine.get_local_vertex_positions_of_mesh_object_wireframe(meshIndex);
+    
+    engine.animation_loop(function() {
+
+        let se2 = [[Math.cos(params.rotationAngle), -Math.sin(params.rotationAngle), params.translationX], 
+                    [Math.sin(params.rotationAngle), Math.cos(params.rotationAngle), params.translationY],
+                    [0.0, 0.0, 1.0]];
+
+        let new_points = points.map(point => {
+            let threeD_point = [[point[0][0]], [point[1][0]], [1.0]];
+            let new_threeD_point = mul_matrix_matrix(se2,threeD_point);
+            return [[new_threeD_point[0][0]], [new_threeD_point[1][0]]];
+        });
+
+        let new_wireframe_points = wireframe_points.map(point => {
+            let threeD_point = [[point[0][0]], [point[1][0]], [1.0]];
+            let new_threeD_point = mul_matrix_matrix(se2,threeD_point);
+            return [[new_threeD_point[0][0]], [new_threeD_point[1][0]]];
+        });
+
+        engine.update_vertex_positions_of_mesh_object(meshIndex, new_points);
+        engine.update_vertex_positions_of_mesh_object_wireframe(meshIndex, new_wireframe_points);
+
+        if (params.drawPoints){
+            new_points.forEach(point => {
+                engine.draw_debug_sphere(point, params.pointSize, 0xffff00);
+            })
+        }
+
+        engine.mesh_objects[meshIndex].visible = params.drawMesh;
+        engine.set_mesh_object_wireframe_visibility (meshIndex, params.drawWireframe);
+    });
+
+</script>
+</body>
+</html>
